@@ -1,0 +1,172 @@
+Parameters:
+  EventBusName:
+    Type: String
+    Description: The name of the event bus
+  TableName: 
+    Type: String
+    Description: The name of the DynamoDB table
+  MyBucket:
+    Type: String
+    Description: S3 bucket with lambda code
+  S3Key:
+    Type: String
+    Description: File containing lambda code
+
+Resources:
+  # Creates DynamoDB table
+  MyTable:
+    Type: AWS::DynamoDB::Table 
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: hostname
+          AttributeType: S
+        - AttributeName: players
+          AttributeType: S
+        - AttributeName: map
+          AttributeType: S
+        - AttributeName: mode
+          AttributeType: S
+      KeySchema:
+        - AttributeName: hostname
+          KeyType: HASH
+        - AttributeName: players
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+      TableName: !Ref TableName
+      GlobalSecondaryIndexes:
+        - IndexName: MapModeIndex
+          KeySchema:
+            - AttributeName: map
+              KeyType: HASH
+            - AttributeName: mode
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 1
+            WriteCapacityUnits: 1
+
+  # Creates Lambda function
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-function"
+      Code:
+        S3Bucket: !Ref MyBucket
+        S3Key: !Ref  S3Key
+      Handler: lambda_function.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.12
+      Timeout: 300
+
+  # Creates Event bus
+  EventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Ref EventBusName
+
+  # Creates Lambda role with policies to record on DynamoDB
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${AWS::StackName}-lambda-policy"
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - events:PutEvents
+                  - dynamodb:PutItem
+                Resource:
+                  - !GetAtt EventBus.Arn
+                  - !GetAtt MyTable.Arn
+
+  # Creates State Machine role
+  StepRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${AWS::StackName}-state-machine-policy"
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - events:PutEvents
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt EventBus.Arn
+                  - !GetAtt LambdaFunction.Arn
+
+  # Creates State Machine
+  StateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    DependsOn: MyTable
+    Properties:
+      StateMachineName: !Sub "${AWS::StackName}-state-machine"
+      Definition:
+          StartAt: SendEvent
+          States: 
+            SendEvent: 
+              Type: Task
+              Resource: "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:event-bus:${EventBus}"
+              Next: RunLambda
+            RunLambda:
+              Type: Task
+              Resource: "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaFunction}"
+              End: true
+      RoleArn: !GetAtt StepRole.Arn
+
+  #Creates Rule to start state machine
+  StartStateMachineEventRule:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      RoleArn: !GetAtt InvokeStateMachineIamRole.Arn
+      Description: 'Start state machine when game-session-request.requested hits event bus'
+      EventPattern:
+        source:
+          - 'aws.gamekit'
+        detail-type:
+          - 'game-session-request.requested'
+      State: 'ENABLED'
+      Targets:
+        - Arn: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${StateMachine}"
+          Id: 'StartStateMachineTarget'
+          RoleArn: !GetAtt InvokeStateMachineIamRole.Arn
+
+  #Creates role to perform state machine trigger
+  InvokeStateMachineIamRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      Policies:
+        - PolicyName: 'InvokeStateMachineRolePolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action: ['states:StartExecution']
+                Resource: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${StateMachine}"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: ['events.amazonaws.com']
+            Action: 'sts:AssumeRole'

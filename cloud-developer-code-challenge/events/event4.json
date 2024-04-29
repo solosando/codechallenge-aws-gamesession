@@ -1,0 +1,13 @@
+{
+    "source": "code-challenge",
+    "event": "game-session-request.finished",
+    "detail": {
+      "sessionId": "1234",
+      "gameDetails": {
+        "hostname": "hostname",
+        "players": "2",
+        "map": "game_map",
+        "mode": "easy"
+      }
+    }
+  }

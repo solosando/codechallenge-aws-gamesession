@@ -1,0 +1,7 @@
+{
+    "source": "code-challenge",
+    "detail-type": "game-session-request.started",
+    "detail": {
+      "sessionId": "1234"
+    }
+  }

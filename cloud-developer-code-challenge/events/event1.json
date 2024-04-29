@@ -1,0 +1,14 @@
+{
+  "eventName": "game-session-request.requested",
+  "data": {
+    "sessionId": "1234",
+    "gameDetails": {
+      "host": {
+        "name": "hostname"
+      },
+      "players": "2",
+      "map": "game_map",
+      "mode": "easy"
+    }
+  }
+}
