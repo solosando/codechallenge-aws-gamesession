@@ -21,13 +21,13 @@ To run the code, follow these steps:
 
 5. Run the command to deploy the stack specifying the arguments: 
 
-   --bucket-name=The name of the s3 bucket to be created
-   --file-name = The path to the directory containing the .zip file with lambda code
-   --stack-name =The name of the cloudformation stack to be created
-   --template-body=The yaml file with the stack resources to be crated
-   --capabilities=The capabilities for the cloudformation stack
-   --parameters=The parameters for the cloudformation stack
-   --events-dir =The path to the directory containing the JSON files with event details
+   - --bucket-name=The name of the s3 bucket to be created
+   - --file-name = The path to the directory containing the .zip file with lambda code
+   - --stack-name =The name of the cloudformation stack to be created
+   - --template-body=The yaml file with the stack resources to be crated
+   - --capabilities=The capabilities for the cloudformation stack
+   - --parameters=The parameters for the cloudformation stack
+   - --events-dir =The path to the directory containing the JSON files with event details
 
  Example: 
 
